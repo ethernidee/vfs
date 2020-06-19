@@ -9,7 +9,7 @@ unit VfsExport;
 uses
   Windows,
   Utils,
-  VfsDebug, VfsBase, VfsControl, VfsWatching;
+  VfsDebug, VfsBase, VfsControl, VfsWatching, VfsUtils;
 
 exports
   VfsDebug.SetLoggingProc,
@@ -79,7 +79,7 @@ begin
   result := Externalize(VfsBase.GetMappingsReport);
 end;
 
-function GetMappingsReportA: {O} pchar; stdcall;
+function GetMappingsReportA: {O} PAnsiChar; stdcall;
 begin
   result := Externalize(AnsiString(VfsBase.GetMappingsReport));
 end;
@@ -91,7 +91,7 @@ begin
   result := Externalize(VfsBase.GetDetailedMappingsReport);
 end;
 
-function GetDetailedMappingsReportA: {O} pchar; stdcall;
+function GetDetailedMappingsReportA: {O} PAnsiChar; stdcall;
 begin
   result := Externalize(AnsiString(VfsBase.GetDetailedMappingsReport));
 end;
@@ -130,18 +130,30 @@ begin
   VfsDebug.SetLoggingProc(@ConsoleLoggingProc);
 end; // .procedure InitConsole;
 
+(* Returns real path for vfs item by its virtual path or empty string on error *)
+function GetRealPath (const VirtPath: WideString): {O} PWideChar; stdcall;
+begin
+  result := Externalize(VfsBase.GetVfsItemRealPath(VfsUtils.NormalizePath(VirtPath)));
+end;
+
+function GetRealPathA (const VirtPath: AnsiString): {O} PAnsiChar; stdcall;
+begin
+  result := Externalize(AnsiString(VfsBase.GetVfsItemRealPath(VfsUtils.NormalizePath(VirtPath))));
+end;
+
 exports
+  GetDetailedMappingsReport,
+  GetDetailedMappingsReportA,
+  GetMappingsReport,
+  GetMappingsReportA,
+  GetRealPath,
+  GetRealPathA,
+  InstallConsoleLogger,
   MapDir,
   MapDirA,
   MapModsFromList,
   MapModsFromListA,
-  RunWatcher,
-  RunWatcherA,
-  GetMappingsReport,
-  GetMappingsReportA,
-  GetDetailedMappingsReport,
-  GetDetailedMappingsReportA,
   MemFree,
-  InstallConsoleLogger;
-
+  RunWatcher,
+  RunWatcherA;
 end.
