@@ -139,7 +139,7 @@ begin
       ReplacedObjAttrs.ObjectName    := @ReplacedPath;
       ReplacedObjAttrs.ObjectName.AssignExistingStr(RedirectedPath);
     end;
-    
+
     result := OrigFunc(@ReplacedObjAttrs, FileInformation);
   end; // .else
 
@@ -202,7 +202,7 @@ begin
       ReplacedObjAttrs.ObjectName    := @ReplacedPath;
       ReplacedObjAttrs.ObjectName.AssignExistingStr(RedirectedPath);
     end;
-    
+
     result := OrigFunc(@ReplacedObjAttrs, FileInformation);
   end; // .else
 
@@ -272,7 +272,7 @@ begin
     end;
 
     Leave;
-  end;  
+  end;
 
   if VfsDebug.LoggingEnabled then begin
     if ExpandedPath <> StripNtAbsPathPrefix(RedirectedPath) then begin
@@ -300,7 +300,7 @@ begin
 
     Leave;
   end;
-  
+
   if VfsDebug.LoggingEnabled then begin
     WriteLog('[LEAVE] NtClose', Format('Status: %x', [integer(result)]));
   end;
@@ -349,7 +349,7 @@ begin
 
   case TargetFormat of
     FileNamesInformation: PFILE_NAMES_INFORMATION(Buf).FileNameLength := SrcInfo.Base.FileNameLength;
-   
+
     FileBothDirectoryInformation, FileDirectoryInformation, FileFullDirectoryInformation, FileIdBothDirectoryInformation, FileIdFullDirectoryInformation: begin
       Utils.CopyMem(StructBaseSize, @SrcInfo.Base, Buf);
     end;
@@ -366,7 +366,7 @@ begin
 end; // .function ConvertFileInfoStruct
 
 const
-  MASK_ALL_FILES: WideString = '*'#0;
+  MASK_ALL_FILES: WideString = '*';
 
 function Hook_NtQueryDirectoryFile (OrigFunc: WinNative.TNtQueryDirectoryFile; FileHandle: HANDLE; Event: HANDLE; ApcRoutine: pointer; ApcContext: PVOID; Io: PIO_STATUS_BLOCK; Buffer: PVOID;
                                     BufLength: ULONG; InfoClass: integer (* FILE_INFORMATION_CLASS *); SingleEntry: BOOLEAN; {n} Mask: PUNICODE_STRING; RestartScan: BOOLEAN): NTSTATUS; stdcall;
@@ -437,7 +437,7 @@ begin
         Proceed := false;
         result  := STATUS_INFO_LENGTH_MISMATCH;
       end;
-  
+
       // Validate information class
       if Proceed and not IsSupportedFileInformationClass(InfoClass) then begin
         Proceed := false;
@@ -507,7 +507,7 @@ begin
 
             if IsFirstEntry then begin
               result := STATUS_INFO_LENGTH_MISMATCH;
-            end;            
+            end;
           end else if StructConvertResult = TRUNCATED_NAME then begin
             if IsFirstEntry then begin
               result := STATUS_BUFFER_OVERFLOW;
@@ -533,7 +533,7 @@ begin
             BytesWritten := 0;
           end;
         end; // .while
-      end; // .if    
+      end; // .if
 
       Io.Status.Status := result;
 
