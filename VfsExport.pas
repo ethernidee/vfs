@@ -1,6 +1,6 @@
 unit VfsExport;
 (*
-  
+
 *)
 
 
@@ -54,6 +54,16 @@ end;
 function MapModsFromListA (const RootDir, ModsDir, ModListFile: PAnsiChar; Flags: integer = 0): LONGBOOL; stdcall;
 begin
   result := VfsControl.MapModsFromList(WideString(RootDir), WideString(ModsDir), WideString(ModListFile), Flags);
+end;
+
+function GetSerializedModList: {O} pointer; stdcall;
+begin
+  result := VfsControl.GetSerializedModList;
+end;
+
+function GetSerializedModListA: {O} pointer; stdcall;
+begin
+  result := VfsControl.GetSerializedModListA;
 end;
 
 function RunWatcher (const WatchDir: PWideChar; DebounceInterval: integer): LONGBOOL; stdcall;
@@ -148,6 +158,8 @@ exports
   GetMappingsReportA,
   GetRealPath,
   GetRealPathA,
+  GetSerializedModList,
+  GetSerializedModListA,
   InstallConsoleLogger,
   MapDir,
   MapDirA,

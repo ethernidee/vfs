@@ -7,9 +7,20 @@ unit VfsControl;
 (***)  interface  (***)
 
 uses
-  Windows, SysUtils,
-  Utils, WinUtils, TypeWrappers, DataLib, Files, StrLib,
-  VfsBase, VfsUtils, VfsHooks, VfsWatching;
+  SysUtils,
+  Windows,
+
+  DataLib,
+  Files,
+  StrLib,
+  TypeWrappers,
+  Utils,
+  WinUtils,
+
+  VfsBase,
+  VfsHooks,
+  VfsUtils,
+  VfsWatching;
 
 type
   (* Import *)
@@ -26,12 +37,36 @@ function RunVfs (DirListingOrder: VfsBase.TDirListingSortType): LONGBOOL; stdcal
    Returns true if root and mods directory existed and file with mod list was loaded successfully *)
 function MapModsFromList (const RootDir, ModsDir, ModListFile: WideString; Flags: integer = 0): boolean;
 
+(* Serializes the last mapped mod list into buffer. Format:
+
+  NumMods: integer;
+
+  for i := 1 to NumMods
+    ModNameLenChars: integer;
+    ModName:         array ModNameLenChars of WideChar;
+*)
+function GetSerializedModList: {O} pointer;
+
+(* Serializes the last mapped mod list into ansi string buffer. Format:
+
+  NumMods: integer;
+
+  for i := 1 to NumMods
+    ModNameLenChars: integer;
+    ModName:         array ModNameLenChars of AnsiChar;
+*)
+function GetSerializedModListA: {O} pointer;
+
 
 (***)  implementation  (***)
 
 
 type
   TModList = DataLib.TList {of (O) TWideString};
+
+
+var
+{On} GlobalModList: TModList = nil;
 
 
 function RunVfs (DirListingOrder: VfsBase.TDirListingSortType): LONGBOOL; stdcall;
@@ -44,7 +79,7 @@ begin
     Enter;
 
     result := VfsBase.RunVfs(DirListingOrder);
-    
+
     if result then begin
       VfsHooks.InstallHooks;
 
@@ -77,25 +112,27 @@ begin
   StrLen := Length(ModName);
   i      := 1;
 
-  while (i <= StrLen) and ((ord(ModName[i]) > 255) or not (AnsiChar(ModName[i]) in DISALLOWED_CHARS)) do begin
+  while (i <= StrLen) and ((ord(ModName[i]) > High(byte)) or not (AnsiChar(ModName[i]) in DISALLOWED_CHARS)) do begin
     Inc(i);
   end;
 
-  result := (i > StrLen) and (ModName <> '') and (ModName <> '.') and (ModName <> '..');
+  result := (i > StrLen) and (ModName <> '') and (ModName <> '.') and (ModName <> '..') and (ModName[1] <> ' ') and (ModName[StrLen] <> ' ');
 end;
 
-function LoadModList (const ModListFilePath: WideString; {O} var {out} ModList: TModList): boolean;
+function LoadModList (const ModListFilePath, ModsDir: WideString; {O} var {out} ModList: TModList): boolean;
 const
   UTF8_BOM = #$EF#$BB#$BF;
 
 var
-  AbsFilePath:  WideString;
-  FileHandle:   integer;
-  FileContents: string;
-  Lines:        Utils.TArrayOfStr;
-  ModNameUtf8:  string;
-  ModName:      WideString;
-  i:            integer;
+  AbsFilePath:   WideString;
+  ModPathPrefix: WideString;
+  FileHandle:    integer;
+  FileContents:  string;
+  ModDirAttrs:   integer;
+  Lines:         Utils.TArrayOfStr;
+  ModNameUtf8:   string;
+  ModName:       WideString;
+  i:             integer;
 
 begin
   AbsFilePath := VfsUtils.NormalizePath(ModListFilePath);
@@ -118,13 +155,14 @@ begin
         FileContents := Copy(FileContents, Length(UTF8_BOM) + 1);
       end;
 
-      Lines := StrLib.Explode(FileContents, #10);
+      Lines         := StrLib.Explode(FileContents, #10);
+      ModPathPrefix := VfsUtils.AddBackslash(VfsUtils.NormalizePath(ModsDir));
 
       for i := 0 to High(Lines) do begin
         ModNameUtf8 := Lines[i];
         ModName     := StrLib.TrimW(StrLib.Utf8ToWide(ModNameUtf8, StrLib.FAIL_ON_ERROR));
 
-        if ValidateModName(ModName) then begin
+        if ValidateModName(ModName) and VfsUtils.GetFileAttrs(ModPathPrefix + ModName, ModDirAttrs) and Utils.Flags(ModDirAttrs).Have(Windows.FILE_ATTRIBUTE_DIRECTORY) then begin
           ModList.Add(TWideString.Create(ModName));
         end;
       end;
@@ -151,7 +189,7 @@ begin
   result     := (AbsRootDir <> '') and (AbsModsDir <> '')  and
                 VfsUtils.GetFileInfo(AbsRootDir, FileInfo) and Utils.Flags(FileInfo.Base.FileAttributes).Have(Windows.FILE_ATTRIBUTE_DIRECTORY) and
                 VfsUtils.GetFileInfo(AbsModsDir, FileInfo) and Utils.Flags(FileInfo.Base.FileAttributes).Have(Windows.FILE_ATTRIBUTE_DIRECTORY);
-  
+
   if result then begin
     ModPathPrefix := VfsUtils.AddBackslash(AbsModsDir);
 
@@ -159,27 +197,72 @@ begin
       ModName := TWideString(ModList[i]).Value;
       VfsBase.MapDir(AbsRootDir, ModPathPrefix + ModName, not VfsBase.OVERWRITE_EXISTING, Flags);
     end;
-  end; // .if
-end; // .function MapModsFromList
+  end;
+end;
 
 function MapModsFromList (const RootDir, ModsDir, ModListFile: WideString; Flags: integer = 0): boolean;
-var
-{O} ModList: TModList;
-
 begin
-  ModList := nil;
-  // * * * * * //
   result := VfsBase.EnterVfsConfig;
 
   if result then begin
     try
-      result := LoadModList(ModListFile, ModList) and MapModsFromList_(RootDir, ModsDir, ModList, Flags);
+      SysUtils.FreeAndNil(GlobalModList);
+
+      result := LoadModList(ModListFile, ModsDir, GlobalModList) and MapModsFromList_(RootDir, ModsDir, GlobalModList, Flags);
     finally
       VfsBase.LeaveVfsConfig;
     end;
   end;
+end;
+
+function GetSerializedModList: {O} pointer;
+var
+{O} Builder: StrLib.TStrBuilder;
+    i:       integer;
+
+begin
+  Builder := StrLib.TStrBuilder.Create;
+  result  := nil;
   // * * * * * //
-  SysUtils.FreeAndNil(ModList);
-end; // .function MapModsFromList
+  if GlobalModList = nil then begin
+    Builder.WriteInt(0);
+  end else begin
+    Builder.WriteInt(GlobalModList.Count);
+
+    for i := 0 to GlobalModList.Count - 1 do begin
+      Builder.AppendWideWithLenField(TWideString(GlobalModList[i]).Value);
+    end;
+  end;
+
+  System.GetMem(result, Builder.Size);
+  Builder.BuildTo(result, Builder.Size);
+  // * * * * * //
+  SysUtils.FreeAndNil(Builder);
+end;
+
+function GetSerializedModListA: {O} pointer;
+var
+{O} Builder: StrLib.TStrBuilder;
+    i:       integer;
+
+begin
+  Builder := StrLib.TStrBuilder.Create;
+  result  := nil;
+  // * * * * * //
+  if GlobalModList = nil then begin
+    Builder.WriteInt(0);
+  end else begin
+    Builder.WriteInt(GlobalModList.Count);
+
+    for i := 0 to GlobalModList.Count - 1 do begin
+      Builder.AppendWithLenField(TWideString(GlobalModList[i]).Value);
+    end;
+  end;
+
+  System.GetMem(result, Builder.Size);
+  Builder.BuildTo(result, Builder.Size);
+  // * * * * * //
+  SysUtils.FreeAndNil(Builder);
+end;
 
 end.

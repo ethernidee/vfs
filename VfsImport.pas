@@ -1,6 +1,6 @@
 unit VfsImport;
 (*
-  
+   VFS imported API.
 *)
 
 
@@ -31,30 +31,52 @@ procedure WriteLog (const Operation, Message: pchar); stdcall; external 'vfs.dll
    from another one via Line Feed (#10) character. Each mod named is trimmed, converted to UCS16 and validated before
    adding to list. Invalid or empty mods will be skipped. Mods are mapped in reverse order, as compared to their order in file.
    Returns true if root and mods directory existed and file with mod list was loaded successfully *)
-function MapModsFromList (const RootDir, ModsDir, ModListFile: PWideChar; Flags: integer = 0): LONGBOOL; stdcall; external 'vfs.dll';
-function MapModsFromListA (const RootDir, ModsDir, ModListFile: PAnsiChar; Flags: integer = 0): LONGBOOL; stdcall; external 'vfs.dll';
+function MapModsFromList (const RootDir, ModsDir, ModListFile: PWideChar; Flags: integer = 0): longbool; stdcall; external 'vfs.dll';
+function MapModsFromListA (const RootDir, ModsDir, ModListFile: PAnsiChar; Flags: integer = 0): longbool; stdcall; external 'vfs.dll';
 
 (* Runs all VFS subsystems, unless VFS is already running *)
-function RunVfs (DirListingOrder: TDirListingSortType): LONGBOOL; stdcall; external 'vfs.dll';
+function RunVfs (DirListingOrder: TDirListingSortType): longbool; stdcall; external 'vfs.dll';
 
 (* Spawns separate thread, which starts recursive monitoring for changes in specified directory.
    VFS will be fully refreshed or smartly updated on any change. Debounce interval specifies
    time in msec to wait after last change before running full VFS rescanning routine *)
-function RunWatcher (const WatchDir: PWideChar; DebounceInterval: integer): LONGBOOL; stdcall; external 'vfs.dll';
-function RunWatcherA (const WatchDir: pchar; DebounceInterval: integer): LONGBOOL; stdcall; external 'vfs.dll';
+function RunWatcher (const WatchDir: PWideChar; DebounceInterval: integer): longbool; stdcall; external 'vfs.dll';
+function RunWatcherA (const WatchDir: pchar; DebounceInterval: integer): longbool; stdcall; external 'vfs.dll';
 
 (* Frees buffer, that was transfered to client earlier using other VFS API *)
 procedure MemFree ({O} Buf: pointer); stdcall; external 'vfs.dll';
 
-(* Returns text with all applied mappings, separated via #13#10. If ShortenPaths is true, common part
-   of real and virtual paths is stripped. Call MemFree to release result buffer *)
+(* Returns text with all applied mappings, separated via #13#10. Call MemFree to release result buffer *)
 function GetMappingsReport: {O} PWideChar; stdcall; external 'vfs.dll';
 function GetMappingsReportA: {O} pchar; stdcall; external 'vfs.dll';
 
-(* Returns text with all applied mappings on per-file level, separated via #13#10. If ShortenPaths is true, common part
-   of real and virtual paths is stripped *)
+(* Returns text with all applied mappings on per-file level, separated via #13#10 *)
 function GetDetailedMappingsReport: {O} PWideChar; stdcall; external 'vfs.dll';
 function GetDetailedMappingsReportA: {O} pchar; stdcall; external 'vfs.dll';
+
+(* Serializes the last mapped mod list into buffer. Format:
+
+  NumMods: integer;
+
+  for i := 1 to NumMods
+    ModNameLenChars: integer;
+    ModName:         array ModNameLenChars of WideChar;
+*)
+function GetSerializedModList: {O} pointer; stdcall; external 'vfs.dll';
+
+(* Serializes the last mapped mod list into ansi string buffer. Format:
+
+  NumMods: integer;
+
+  for i := 1 to NumMods
+    ModNameLenChars: integer;
+    ModName:         array ModNameLenChars of AnsiChar;
+*)
+function GetSerializedModListA: {O} pointer; stdcall; external 'vfs.dll';
+
+(* Returns real path for vfs item by its virtual path or empty string on error *)
+function GetRealPath (const VirtPath: WideString): {O} PWideChar; stdcall; external 'vfs.dll';
+function GetRealPathA (const VirtPath: AnsiString): {O} PAnsiChar; stdcall; external 'vfs.dll';
 
 (* Allocates console and install logger, writing messages to console *)
 procedure InstallConsoleLogger; stdcall; external 'vfs.dll';
